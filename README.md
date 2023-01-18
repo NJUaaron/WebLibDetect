@@ -12,7 +12,7 @@ For development version: open FireFox browser, navigate to `about:debugging` sit
 
 After loading the extension, click "detect" button. The result will show in the browser console log (red block in the following picture).
 
-![example](/Users/xinyueliu/Projects/WebLibDetect/img/example.png)
+![example](img/example.png)
 
 
 
