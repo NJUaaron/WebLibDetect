@@ -9,13 +9,24 @@
     "icons": {
       "48": "icons/border-48.png"
     },
+    "permissions": [
+      "activeTab"
+    ],
   
+    "browser_action": {
+      "default_icon": "icons/border-48.png",
+      "default_title": "LibDetector",
+      "default_popup": "popup/DtrMenu.html"
+    },
     "content_scripts": [
       {
-        "matches": ["http://*/*", "https://*/*"],
-        "js": ["libdetector.js"],
-        "run_at": "document_end"
+          "matches": ["http://*/*", "https://*/*"],
+          "js": ["content_scripts/inject.js"],
+          "run_at": "document_end"
       }
+    ],
+    "web_accessible_resources": [
+      "data/*.json"
     ]
   
   }
