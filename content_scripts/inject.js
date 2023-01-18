@@ -15,17 +15,9 @@ const url4 = browser.runtime.getURL('data/subtrees.json');
  * Call "insertBeast()" or "removeExistingBeasts()".
  */
 browser.runtime.onMessage.addListener((message) => {
-    if (message.command === "genTree") {
-        window.postMessage({type: 'genTree', url: url1}, "*")
-        console.log('send message 1.')
-    }
-    else if (message.command === "analTree") {
-        window.postMessage({type: 'analTree', url: url2}, "*")
-        console.log('send message 2.')
-    }
-    else if (message.command === "detect") {
+    if (message.command === "detect") {
         window.postMessage({type: 'detect', urls: [url1, url3, url4]}, "*")
-        console.log('send message 3.')
+        console.log('send message <detect>.')
     }
     else {
         console.log('Other Message.')

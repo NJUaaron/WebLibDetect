@@ -145,7 +145,6 @@
     /**
      * Listen for messages from the content script.
      */
-    var tree;
     window.addEventListener("message", function (event) {
         if (event.data.type == 'detect') {
             let requests = event.data.urls.map((url) => {
