@@ -1,7 +1,8 @@
 {
 
-    "manifest_version": 2,
-    "name": "LibDetector",
+    "manifest_version": 3,
+    "name": "pTree-based Lib Detector",
+    "short_name": "pDetector",
     "version": "1.0",
   
     "description": "Detect JavaScript libraries used on the current web page.",
@@ -10,10 +11,13 @@
       "48": "icons/border-48.png"
     },
     "permissions": [
-      "activeTab"
+      "tabs"
+    ],
+    "host_permissions": [
+      "*://*/*"
     ],
   
-    "browser_action": {
+    "action": {
       "default_icon": "icons/border-48.png",
       "default_title": "LibDetector",
       "default_popup": "popup/DtrMenu.html"
@@ -25,8 +29,10 @@
           "run_at": "document_end"
       }
     ],
-    "web_accessible_resources": [
-      "data/*.json"
+    "web_accessible_resources": [{
+        "resources": ["data/*.json", "content_scripts/detect.js"],
+        "matches": ["http://*/*", "https://*/*"]
+      }
     ]
   
   }
