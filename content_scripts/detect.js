@@ -67,11 +67,11 @@
     }
 
     var keywords = [];
-    function findKeywords(prefix, v_name, sts_index, depth) {
+    function findKeywords(prefix, v_name, pts, depth) {
         // st_index @: subtrees_index dict     
         if (depth > 3) return;
         if (hasSameAddr(prefix, v_name)) return;
-        if (sts_index.hasOwnProperty(v_name)) {
+        if (pts.hasOwnProperty(v_name)) {
             keywords.push([v_name, prefix])
         }
         // console.log(`${prefix}["${v_name}"]`)
@@ -85,61 +85,88 @@
         }
         // console.log(children)
         for (let child_v of children) {
-            findKeywords(`${prefix}["${v_name}"]`, child_v, sts_index, depth + 1)
+            findKeywords(`${prefix}["${v_name}"]`, child_v, pts, depth + 1)
         }
     }
 
     
-    function compare_Node_V (node, v) {
-        if (!node) return false;
+    function compare_Dict_V (_dict, v) {
+        if (!_dict) return false;
         if (v == undefined) {
-            if (node['d']['t'] == 1) return true;
+            if (_dict['t'] == 1) return true;
             else return false;
         }
         if (v == null) {
-            if (node['d']['t'] == 2) return true;
+            if (_dict['t'] == 2) return true;
             else return false;
         }
         if (Array.isArray(v)) {
-            if (node['d']['t'] == 3 && node['d']['v'] == v.length) return true;
+            if (_dict['t'] == 3 && _dict['v'] == v.length) return true;
             else return false;
         }
         if (typeof (v) == 'string') {
-            if (node['d']['t'] == 4 && node['d']['v'] == v.slice(0, 10)) return true;
+            if (_dict['t'] == 4 && _dict['v'] == v.slice(0, 10).replace(/<|>/g, '_')) return true;
             else return false;
         }
         if (typeof (v) == 'object') {
-            if (node['d']['t'] == 5) return true;
+            if (_dict['t'] == 5) return true;
             else return false;
         }
         if (typeof (v) == 'function') {
-            if (node['d']['t'] == 6) return true;
+            if (_dict['t'] == 6) return true;
             else return false;        
         }
         if (typeof (v) == 'number') {
-            if (node['d']['t'] == 7 && node['d']['v'] == v.toFixed(2)) return true;
+            if (_dict['t'] == 7 && _dict['v'] == v.toFixed(2)) return true;
             else return false;
         }
         // Other condition
-        if (node['d']['t'] == typeof (v)) return true;
+        if (_dict['t'] == typeof (v)) return true;
         else return false;
     }
     
-    function MatchCredit(node, prefix) {
-        // Return total credit and traversed node number
-        let v = `${prefix}["${node["n"]}"]`
-        // console.log(v)
-        if (!eval(`compare_Node_V (node, ${v})`)) {
-            return [0, 0]
+    function matchPTree(pt, prefix='window', match_record) {
+        // BFS
+        let q = []      // Property Path Queue
+        let qc = []     // pTree Queue
+        q.push([])
+        qc.push(pt)
+
+        while (qc.length) {
+            let v_path = q.shift()
+            let cur_node = qc.shift()
+
+            v_str = prefix
+            for (let v of v_path) {
+                v_str += `["${v}"]`
+            }
+
+            for (let _dict of cur_node['d']) {
+                if (eval(`compare_Dict_V (_dict['d'], ${v_str})`)) {
+                    for (let lib_info of _dict['Ls']) {
+                        file_id = lib_info['F']
+                        credit1 = lib_info['x']
+                        if (match_record.hasOwnProperty(file_id)) {
+                            match_record[file_id]['credit1'] += credit1
+                            match_record[file_id]['matched'] += 1
+                        }
+                        else {
+                            match_record[file_id] = {'credit1': credit1, 'matched': 1}
+                        }
+                    }
+                }
+            }
+
+            v_prop = eval(`Object.keys(${v_str})`)
+            for (let child of cur_node['c']) {
+                if (v_prop.includes(child['n'])) {
+                    q.push([...v_path])              // shallow copy
+                    q[q.length - 1].push(child['n'])
+                    qc.push(child)
+                }
+            }             
+
         }
-        let x = node['x']
-        let node_num = 1
-        for (c of node['c']) {
-            let [_x, _node_num] = MatchCredit(c, v)
-            x += _x
-            node_num += _node_num
-        }
-        return [x, node_num]
     }
 
     /**
@@ -153,9 +180,9 @@
             });
             Promise.all(requests)
                 .then((results) => {
-                    let orig = results[0]
-                    let sts_index = results[1]
-                    let sts = results[2]
+                    let blacklist = results[0]
+                    let pts = results[1]
+                    let file_list = results[2]
 
                     // Find all keywords in the web object tree
                     let vlist = Object.keys(window)
@@ -163,41 +190,23 @@
 
                     keywords = [];
                     for (let v of vlist) {
-                        findKeywords('window', v, sts_index, 1);
+                        findKeywords('window', v, pts, 1);      // NEED CHANGE HERE
                     }
                     console.log(`Detected keywords' number: ${keywords.length}`)
                     console.log(keywords);
 
                     // Calculate the credit for each library
-                    let credit_table = {}
+                    let match_record = {}
                     for (let keyword of keywords) {
                         let v_name = keyword[0]
                         let v_prefix = keyword[1]
-                        let st_index_list = sts_index[v_name]
-                        for (let st_index of st_index_list) {
-                            let index = st_index['tree_index']
-                            let lib_name = st_index['lib']
-                            if (!credit_table.hasOwnProperty(lib_name)) {
-                                // Initialize a new entry for the lib
-                                credit_table[lib_name] = {}
-                            }
-                            let matchtree = sts[index]
-                            let [credit, node_num] = MatchCredit(matchtree, v_prefix)
-                            if (credit_table[lib_name].hasOwnProperty(index)) {
-                                // The subtree has already been calculated
-                                let old_credit = credit_table[lib_name][index][credit]
-                                if (credit > old_credit) {
-                                    // Update the higher credit one
-                                    credit_table[lib_name][index] = {"node_number": node_num, "credit": credit, "match_path": `${v_prefix}["${matchtree["n"]}"]`}
-                                }
-                            }
-                            else {
-                                credit_table[lib_name][index] = {"node_number": node_num, "credit": credit, "match_path": `${v_prefix}["${matchtree["n"]}"]`}
-                            }
-                        }   
+                        let pt = pts[v_name]
+                        matchPTree(pt, v_prefix, match_record)
                     }
+
+                        
                     console.log(`Credit table: ({lib: {index: {node_number: xx, credit: xx} ... } ... })`)
-                    console.log(credit_table)
+                    console.log(match_record)
 
                     // Sort the result based on credit score
                     let result_table = []
