@@ -9,17 +9,7 @@
     }
     window.DetectorHasRun = true;
 
-
-
-    class TreeNode {
-        constructor(_name, _dict) {
-            this.name = _name
-            this.dict = _dict
-            this.children = []
-        }
-    }
-
-    function analyzeVariable2(v) {
+    function getAttr(v) {
         if (v == undefined || v == null) {
             return [];
         }
@@ -66,28 +56,67 @@
         return false
     }
 
-    var keywords = [];
-    function findKeywords(prefix, v_name, pts, depth) {
-        // st_index @: subtrees_index dict     
-        if (depth > 3) return;
-        if (hasSameAddr(prefix, v_name)) return;
-        if (pts.hasOwnProperty(v_name)) {
-            keywords.push([v_name, prefix])
-        }
-        // console.log(`${prefix}["${v_name}"]`)
-        let children;
-        try{
-            children = eval(`analyzeVariable2(${prefix}["${v_name}"])`);
+    function findKeywords(pts, blacklist, depth_limit=3) {
+        let keyword_list = []
+        let q = []
+        q.push([])
+        while (q.length) {
+            let v_path = q.shift()
 
+            let v_str = 'window'
+            for (let v of v_path) {
+                v_str += `["${v}"]`
+            }
+
+            let children;
+            try{
+                children = eval(`getAttr(${v_str})`);
+
+            }
+            catch(err){
+                children = [];
+            }
+            // children = eval(`getAttr(${v_str}")`);
+
+            // Remove global variables in blacklist
+            if (v_path.length == 0)
+            children = children.filter(val => !blacklist.includes(val));
+
+            if (v_path.length < depth_limit) {
+                for (let child_v of children) {
+                    if (pts.hasOwnProperty(child_v)) {
+                        keyword_list.push([child_v, `${v_str}["${child_v}"]`])
+                    }
+                    q.push([...v_path])
+                    q[q.length - 1].push(child_v)
+                }
+            }    
         }
-        catch(err){
-            children = [];
-        }
-        // console.log(children)
-        for (let child_v of children) {
-            findKeywords(`${prefix}["${v_name}"]`, child_v, pts, depth + 1)
-        }
+        return keyword_list
     }
+
+    // var keywords = [];
+    // function findKeywords(prefix, v_name, pts, depth) {
+    //     // st_index @: subtrees_index dict     
+    //     if (depth > 3) return;
+    //     if (hasSameAddr(prefix, v_name)) return;
+    //     if (pts.hasOwnProperty(v_name)) {
+    //         keywords.push([v_name, prefix])
+    //     }
+    //     // console.log(`${prefix}["${v_name}"]`)
+    //     let children;
+    //     try{
+    //         children = eval(`analyzeVariable2(${prefix}["${v_name}"])`);
+
+    //     }
+    //     catch(err){
+    //         children = [];
+    //     }
+    //     // console.log(children)
+    //     for (let child_v of children) {
+    //         findKeywords(`${prefix}["${v_name}"]`, child_v, pts, depth + 1)
+    //     }
+    // }
 
     
     function compare_Dict_V (_dict, v) {
@@ -125,8 +154,9 @@
         else return false;
     }
     
-    function matchPTree(pt, prefix='window', match_record) {
+    function matchPTree(pt, base) {
         // BFS
+        let match_record = {}
         let q = []      // Property Path Queue
         let qc = []     // pTree Queue
         q.push([])
@@ -136,30 +166,38 @@
             let v_path = q.shift()
             let cur_node = qc.shift()
 
-            v_str = prefix
+            let v_str = base
             for (let v of v_path) {
                 v_str += `["${v}"]`
             }
 
+            // match_record:
+            //  [ file_id: {
+            //      'credit1': credit1 score
+            //      'matched': matched node number
+            //   } ]
+
             for (let _dict of cur_node['d']) {
                 if (eval(`compare_Dict_V (_dict['d'], ${v_str})`)) {
                     for (let lib_info of _dict['Ls']) {
-                        file_id = lib_info['F']
-                        credit1 = lib_info['x']
+                        let file_id = lib_info['F']
+                        let credit1 = lib_info['x']
                         if (match_record.hasOwnProperty(file_id)) {
                             match_record[file_id]['credit1'] += credit1
                             match_record[file_id]['matched'] += 1
                         }
                         else {
-                            match_record[file_id] = {'credit1': credit1, 'matched': 1}
+                            match_record[file_id] = {'credit1': credit1, 'matched': 1, 'base': base}
                         }
                     }
                 }
             }
 
-            v_prop = eval(`Object.keys(${v_str})`)
+            let v_prop = eval(`getAttr(${v_str})`)
+            console.log(v_prop)
             for (let child of cur_node['c']) {
                 if (v_prop.includes(child['n'])) {
+                    console.log('includes')
                     q.push([...v_path])              // shallow copy
                     q[q.length - 1].push(child['n'])
                     qc.push(child)
@@ -167,6 +205,57 @@
             }             
 
         }
+        return match_record
+    }
+
+    function classifyLib(match_records, file_list) {
+        let lib_match_list = []
+
+        // lib_match_list: [ {
+        //     lib: lib name
+        //     files: [ {
+        //         'name': file name
+        //         'credit1': credit1 score
+        //         'matched': matched node number
+        //         'base': the matched root path
+        //     } ]
+        // } ]
+
+        for (let match_record_pair of match_records) {
+            let match_record = match_record_pair[0]
+            for (let file_id in match_record) {
+                let file_tag = file_list[file_id]
+                let at_index = file_tag.indexOf('@')
+                let lib_name = file_tag.slice(0, at_index)
+                let file_info = match_record[file_id]
+                file_info['name'] = file_tag.slice(at_index + 1, file_tag.length)
+                file_info['base'] = match_record_pair[1]
+
+                let find_lib_name = false
+                for (let lib_info of lib_match_list) {
+                    if (lib_info['lib'] == lib_name) {
+                        find_lib_name = true
+                        lib_info['files'].push(file_info)
+                        break
+                    }
+                }
+                if (!find_lib_name) {
+                    lib_match_list.push({
+                        'lib': lib_name,
+                        'files': [file_info]
+                    })
+                }
+            }
+        }
+        return lib_match_list
+    }
+
+    function sortScore(lib_match_list) {
+        for (lib_info of lib_match_list) {
+            lib_info['files'].sort((a, b) => b['credit1']-a['credit1'])
+            lib_info['score'] = lib_info['files'][0]['credit1']
+        }
+        lib_match_list.sort((a, b) => b['score']-a['score'])
     }
 
     /**
@@ -185,55 +274,38 @@
                     let file_list = results[2]
 
                     // Find all keywords in the web object tree
-                    let vlist = Object.keys(window)
-                    vlist = vlist.filter(val => !orig.includes(val));
-
-                    keywords = [];
-                    for (let v of vlist) {
-                        findKeywords('window', v, pts, 1);      // NEED CHANGE HERE
-                    }
-                    console.log(`Detected keywords' number: ${keywords.length}`)
-                    console.log(keywords);
+                    let keyword_list = findKeywords(pts, blacklist, 3)
+                    // console.log(keyword_list);
 
                     // Calculate the credit for each library
-                    let match_record = {}
-                    for (let keyword of keywords) {
+                    let match_records = []
+                    for (let keyword of keyword_list) {
                         let v_name = keyword[0]
-                        let v_prefix = keyword[1]
+                        let v_path = keyword[1]
                         let pt = pts[v_name]
-                        matchPTree(pt, v_prefix, match_record)
+                        let match_record = matchPTree(pt, v_path)
+                        match_records.push([match_record, v_path])
                     }
 
-                        
-                    console.log(`Credit table: ({lib: {index: {node_number: xx, credit: xx} ... } ... })`)
-                    console.log(match_record)
+                    // console.log(match_records)
+
+                    // Classify match_record based on lib name
+                    lib_match_list = classifyLib(match_records, file_list)
+                    // console.log(lib_match_list)
+
 
                     // Sort the result based on credit score
-                    let result_table = []
-                    for (let lib_name in credit_table) {
-                        let scores = credit_table[lib_name]
-                        let total_score = 0
-                        let matched_node_num = 0
-                        let match_path = []
-                        for (let st_index in scores) {
-                            total_score += scores[st_index]['credit']
-                            matched_node_num += scores[st_index]['node_number']
-                            match_path.push(scores[st_index]['match_path'])
-                        }
-                        result_table.push({'lib': lib_name, 'score': total_score.toFixed(1), 'matched node': matched_node_num, 'match path': match_path})
-                    }
-                    result_table.sort((a, b) => b['score']-a['score'])
-                    console.log(`Detected libraries' number: ${result_table.length}`)
-                    console.log(result_table)
+                    sortScore(lib_match_list)
+                    console.log(lib_match_list)
 
 
-                    let result_table2 = []
-                    for (let result of result_table) {
-                        if (result['score'] >= 50 && result['matched node'] >= 5) {
-                            result_table2.push(result)
-                        }
-                    }
-                    console.log(result_table2)
+                    // let result_table2 = []
+                    // for (let result of result_table) {
+                    //     if (result['score'] >= 50 && result['matched node'] >= 5) {
+                    //         result_table2.push(result)
+                    //     }
+                    // }
+                    // console.log(result_table2)
 
                 })
 
