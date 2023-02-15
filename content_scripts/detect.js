@@ -172,10 +172,10 @@
             }
 
             // match_record:
-            //  [ file_id: {
+            //  { file_id: {
             //      'credit1': credit1 score
             //      'matched': matched node number
-            //   } ]
+            //   } }
 
             for (let _dict of cur_node['d']) {
                 if (eval(`compare_Dict_V (_dict['d'], ${v_str})`)) {
@@ -224,11 +224,13 @@
         for (let match_record_pair of match_records) {
             let match_record = match_record_pair[0]
             for (let file_id in match_record) {
-                let file_tag = file_list[file_id]
-                let at_index = file_tag.indexOf('@')
-                let lib_name = file_tag.slice(0, at_index)
+                // let file_tag = file_list[file_id]
+                // let at_index = file_tag.indexOf('@')
+                // let lib_name = file_tag.slice(0, at_index)
+                let file_obj = file_list[file_id]
+                let lib_name = file_obj['libname']
                 let file_info = match_record[file_id]
-                file_info['name'] = file_tag.slice(at_index + 1, file_tag.length)
+                file_info['name'] = `${file_obj['filename']} (${file_obj['version']})`
                 file_info['base'] = match_record_pair[1]
 
                 let find_lib_name = false
