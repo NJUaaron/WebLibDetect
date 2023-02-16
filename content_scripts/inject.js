@@ -5,9 +5,9 @@ detectScript.src = chrome.runtime.getURL('content_scripts/detect.js');
 
 head.appendChild(detectScript);
 
-const url1 = chrome.runtime.getURL('data/origin.json');
+const url1 = chrome.runtime.getURL('data/blacklist.json');
 const url2 = chrome.runtime.getURL('data/pts.json');
-const url3 = chrome.runtime.getURL('data/jsfile_list.json');
+const url3 = chrome.runtime.getURL('data/DetectFile.json');
   
 /**
  * Listen for messages from the background script.

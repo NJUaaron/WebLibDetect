@@ -14,7 +14,7 @@
             return [];
         }
         if (typeof (v) == 'object' || typeof (v) == 'function') {
-            return Object.keys(v);
+            return Object.getOwnPropertyNames(v);
         }   
         return [];
     }
