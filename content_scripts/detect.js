@@ -149,6 +149,10 @@
             if (_dict['t'] == 7 && _dict['v'] == v.toFixed(2)) return true;
             else return false;
         }
+        if (typeof (v) == 'boolean') {
+            if (_dict['t'] == 8) return true;
+            else return false;
+        }
         // Other condition
         if (_dict['t'] == typeof (v)) return true;
         else return false;
