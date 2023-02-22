@@ -14,7 +14,9 @@
             return [];
         }
         if (typeof (v) == 'object' || typeof (v) == 'function') {
-            return Object.getOwnPropertyNames(v);
+            let vlist = Object.getOwnPropertyNames(v);
+            vlist = vlist.filter(val => !["prototype"].includes(val));
+            return vlist
         }   
         return [];
     }
@@ -67,7 +69,6 @@
             for (let v of v_path) {
                 v_str += `["${v}"]`
             }
-
             let children;
             try{
                 children = eval(`getAttr(${v_str})`);
@@ -76,11 +77,10 @@
             catch(err){
                 children = [];
             }
-            // children = eval(`getAttr(${v_str}")`);
 
             // Remove global variables in blacklist
             if (v_path.length == 0)
-            children = children.filter(val => !blacklist.includes(val));
+                children = children.filter(val => !blacklist.includes(val));
 
             if (v_path.length < depth_limit) {
                 for (let child_v of children) {
@@ -94,29 +94,6 @@
         }
         return keyword_list
     }
-
-    // var keywords = [];
-    // function findKeywords(prefix, v_name, pts, depth) {
-    //     // st_index @: subtrees_index dict     
-    //     if (depth > 3) return;
-    //     if (hasSameAddr(prefix, v_name)) return;
-    //     if (pts.hasOwnProperty(v_name)) {
-    //         keywords.push([v_name, prefix])
-    //     }
-    //     // console.log(`${prefix}["${v_name}"]`)
-    //     let children;
-    //     try{
-    //         children = eval(`analyzeVariable2(${prefix}["${v_name}"])`);
-
-    //     }
-    //     catch(err){
-    //         children = [];
-    //     }
-    //     // console.log(children)
-    //     for (let child_v of children) {
-    //         findKeywords(`${prefix}["${v_name}"]`, child_v, pts, depth + 1)
-    //     }
-    // }
 
     
     function compare_Dict_V (_dict, v) {
@@ -147,10 +124,6 @@
         }
         if (typeof (v) == 'number') {
             if (_dict['t'] == 7 && _dict['v'] == v.toFixed(2)) return true;
-            else return false;
-        }
-        if (typeof (v) == 'boolean') {
-            if (_dict['t'] == 8) return true;
             else return false;
         }
         // Other condition
@@ -198,10 +171,9 @@
             }
 
             let v_prop = eval(`getAttr(${v_str})`)
-            console.log(v_prop)
+            // console.log(v_prop)
             for (let child of cur_node['c']) {
                 if (v_prop.includes(child['n'])) {
-                    console.log('includes')
                     q.push([...v_path])              // shallow copy
                     q[q.length - 1].push(child['n'])
                     qc.push(child)
