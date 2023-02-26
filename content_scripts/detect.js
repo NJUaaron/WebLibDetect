@@ -229,11 +229,20 @@
     }
 
     function sortScore(lib_match_list) {
-        for (lib_info of lib_match_list) {
+        for (let lib_info of lib_match_list) {
             lib_info['files'].sort((a, b) => b['credit1']-a['credit1'])
             lib_info['score'] = lib_info['files'][0]['credit1']
         }
         lib_match_list.sort((a, b) => b['score']-a['score'])
+    }
+
+    function filterList(lib_match_list) {
+        let newlist = []
+        for (let lib_info of lib_match_list) {
+            if (lib_info['files'][0]['matched'] > 1)
+                newlist.push(lib_info)
+        }
+        return newlist
     }
 
     /**
@@ -274,6 +283,9 @@
 
                     // Sort the result based on credit score
                     sortScore(lib_match_list)
+                    console.log(lib_match_list)
+
+                    lib_match_list = filterList(lib_match_list)
                     console.log(lib_match_list)
 
 
