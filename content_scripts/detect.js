@@ -21,40 +21,74 @@
         return [];
     }
 
-    function hasSameAddr(prefix, v) {
+    // function hasSameAddr(prefix, v) {
+    //     // Prevent loop in the object tree
+    //     // Check whether v points to some parent variable
+    //     if (!prefix)
+    //         return false
+    //     let _v = `${prefix}["${v}"]`
+
+    //     try{
+    //         if (eval(`typeof (${_v}) != 'object' && typeof (${_v}) != 'function'`)) 
+    //             return false
+    //         if (eval(`typeof (${prefix}) == 'object' || typeof (${prefix}) == 'function'`))
+    //             if (eval(`${prefix} == ${_v}`))
+    //                 return true
+    //     }
+    //     catch(err){     // TypeError: 'get nodeType' called on an object that does not implement interface Node.
+    //         return false
+    //     }
+        
+        
+    //     let needClose = true
+    //     for(let p = prefix.length - 1; p > 0; p -= 1) {        
+    //         if (needClose && prefix[p-1] == '"' && prefix[p] == ']') {
+    //             needClose = false
+    //             p-=1
+    //         }
+    //         else if (prefix[p-1] == '[' && prefix[p] == '"') {
+    //             needClose = true
+    //             let parent_v = prefix.slice(0, p-1)
+    //                 if (eval(`typeof (${parent_v}) == 'object' || typeof (${parent_v}) == 'function'`))
+    //                     if (eval(`${parent_v} == ${_v}`))
+    //                         return true
+    //         }
+    //     }
+
+    //     return false
+    // }
+
+    function hasCircle(v_path) {
         // Prevent loop in the object tree
         // Check whether v points to some parent variable
-        if (!prefix)
+        if (v_path.length < 1) 
             return false
-        let _v = `${prefix}["${v}"]`
 
+        cur_v = 'window'
+        for (let v of v_path) {
+            cur_v += `["${v}"]`
+        }
         try{
-            if (eval(`typeof (${_v}) != 'object' && typeof (${_v}) != 'function'`)) 
+            if (eval(`typeof (${cur_v}) != 'object' && typeof (${cur_v}) != 'function'`)) 
                 return false
-            if (eval(`typeof (${prefix}) == 'object' || typeof (${prefix}) == 'function'`))
-                if (eval(`${prefix} == ${_v}`))
-                    return true
         }
-        catch(err){     // TypeError: 'get nodeType' called on an object that does not implement interface Node.
+        catch{
             return false
         }
-        
-        
-        let needClose = true
-        for(let p = prefix.length - 1; p > 0; p -= 1) {        
-            if (needClose && prefix[p-1] == '"' && prefix[p] == ']') {
-                needClose = false
-                p-=1
+        ancient_v = 'window'
+        if (eval(`${ancient_v} == ${cur_v}`))
+            return true
+        for (let i = 0; i < v_path.length - 1; i += 1) {
+            ancient_v += `["${v_path[i]}"]`
+            try {
+                if (eval(`typeof (${ancient_v}) == 'object' || typeof (${ancient_v}) == 'function'`))
+                    if (eval(`${ancient_v} == ${cur_v}`))
+                        return true
             }
-            else if (prefix[p-1] == '[' && prefix[p] == '"') {
-                needClose = true
-                let parent_v = prefix.slice(0, p-1)
-                    if (eval(`typeof (${parent_v}) == 'object' || typeof (${parent_v}) == 'function'`))
-                        if (eval(`${parent_v} == ${_v}`))
-                            return true
+            catch {
+                continue
             }
         }
-
         return false
     }
 
@@ -64,6 +98,9 @@
         q.push([])
         while (q.length) {
             let v_path = q.shift()
+
+            if (hasCircle(v_path))
+                continue
 
             let v_str = 'window'
             for (let v of v_path) {
@@ -85,7 +122,7 @@
             if (v_path.length < depth_limit) {
                 for (let child_v of children) {
                     if (pts.hasOwnProperty(child_v)) {
-                        keyword_list.push([child_v, `${v_str}["${child_v}"]`])
+                        keyword_list.push([v_str, child_v])
                     }
                     q.push([...v_path])
                     q[q.length - 1].push(child_v)
@@ -185,17 +222,19 @@
     }
 
     function classifyLib(match_records, file_list) {
-        let lib_match_list = []
+        let lib_match_list = {}
 
-        // lib_match_list: [ {
-        //     lib: lib name
-        //     files: [ {
-        //         'name': file name
-        //         'credit1': credit1 score
-        //         'matched': matched node number
-        //         'base': the matched root path
-        //     } ]
-        // } ]
+        // lib_match_list: {
+        //     lib_name: {
+        //         file_name: { 
+        //              base: [ {
+        //                  'credit1': credit1 score
+        //                  'matched': matched node number
+        //                  'root': root node name
+        //              } ... ]
+        //         }
+        //     }
+        // }
 
         for (let match_record_pair of match_records) {
             let match_record = match_record_pair[0]
@@ -205,27 +244,51 @@
                 // let lib_name = file_tag.slice(0, at_index)
                 let file_obj = file_list[file_id]
                 let lib_name = file_obj['libname']
-                let file_info = match_record[file_id]
-                file_info['name'] = `${file_obj['filename']} (${file_obj['version']})`
-                file_info['base'] = match_record_pair[1]
+                let file_name = `${file_obj['filename']} (${file_obj['version']})`
+                let base = match_record_pair[1]
 
-                let find_lib_name = false
-                for (let lib_info of lib_match_list) {
-                    if (lib_info['lib'] == lib_name) {
-                        find_lib_name = true
-                        lib_info['files'].push(file_info)
-                        break
-                    }
+                let unit_info = match_record[file_id]
+                unit_info['root'] = match_record_pair[2]
+
+                if (!lib_match_list.hasOwnProperty(lib_name)) {
+                    lib_match_list[lib_name] = {}
                 }
-                if (!find_lib_name) {
-                    lib_match_list.push({
-                        'lib': lib_name,
-                        'files': [file_info]
-                    })
+                if (!lib_match_list[lib_name].hasOwnProperty(file_name)) {
+                    lib_match_list[lib_name][file_name] = {}
                 }
+                if (!lib_match_list[lib_name][file_name].hasOwnProperty(base)) {
+                    lib_match_list[lib_name][file_name][base] = []
+                }
+                lib_match_list[lib_name][file_name][base].push(unit_info)
             }
         }
         return lib_match_list
+    }
+
+    function calScore(lib_match_list) {
+        let new_lib = []
+        for (let lib_name in lib_match_list) {
+            let files = lib_match_list[lib_name]
+            let new_file = []
+            for (let file_name in files) {
+                let bases = files[file_name]
+                let new_base = []
+                for (let base in bases) {
+                    let unit_list = bases[base]
+                    credit1_sum = 0
+                    matched_sum = 0
+                    for (let unit of unit_list) {
+                        credit1_sum += unit['credit1']
+                        matched_sum += unit['matched']
+                    }
+                    new_base.push({'base name': base, 'credit1': credit1_sum, 'matched': matched_sum})
+                }
+                new_file.push({'file name': file_name, 'bases': new_base})
+            }
+            new_lib.push({'lib name': lib_name, 'files': new_file})
+            
+        }
+        return new_lib
     }
 
     function sortScore(lib_match_list) {
@@ -267,11 +330,12 @@
                     // Calculate the credit for each library
                     let match_records = []
                     for (let keyword of keyword_list) {
-                        let v_name = keyword[0]
-                        let v_path = keyword[1]
+                        let v_base = keyword[0]
+                        let v_name = keyword[1]
+
                         let pt = pts[v_name]
-                        let match_record = matchPTree(pt, v_path)
-                        match_records.push([match_record, v_path])
+                        let match_record = matchPTree(pt, `${v_base}["${v_name}"]`)
+                        match_records.push([match_record, v_base, v_name])
                     }
 
                     // console.log(match_records)
@@ -279,14 +343,15 @@
                     // Classify match_record based on lib name
                     lib_match_list = classifyLib(match_records, file_list)
                     // console.log(lib_match_list)
-
+                    score_list = calScore(lib_match_list)
+                    console.log(score_list)
 
                     // Sort the result based on credit score
-                    sortScore(lib_match_list)
-                    console.log(lib_match_list)
+                    // sortScore(score_list)
+                    // console.log(score_list)
 
-                    lib_match_list = filterList(lib_match_list)
-                    console.log(lib_match_list)
+                    // lib_match_list = filterList(lib_match_list)
+                    // console.log(lib_match_list)
 
 
                     // let result_table2 = []
